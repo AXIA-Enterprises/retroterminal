@@ -1,4 +1,4 @@
-// api/chat.js - Place this in an api/ folder
+// api/chat.js - Serverless function for Vercel
 export default async function handler(req, res) {
   // Enable CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
