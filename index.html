@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Terminal</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono:wght@400&display=swap');
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            background: #000;
+            color: #00ff00;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 14px;
+            line-height: 1.4;
+            overflow: hidden;
+        }
+        
+        .terminal-container {
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            background: 
+                radial-gradient(ellipse at center, rgba(0,255,0,0.1) 0%, transparent 70%),
+                linear-gradient(0deg, transparent 49%, rgba(0,255,0,0.03) 50%, transparent 51%);
+            background-size: 100% 100%, 100% 2px;
+        }
+        
+        .terminal-output {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            background: rgba(0,0,0,0.8);
+        }
+        
+        .terminal-input-container {
+            padding: 20px;
+            background: rgba(0,0,0,0.9);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .prompt {
+            color: #00ff00;
+            text-shadow: 0 0 5px #00ff00;
+        }
+        
+        .terminal-input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            color: #00ff00;
+            font-family: inherit;
+            font-size: inherit;
+            outline: none;
+            caret-color: #00ff00;
+        }
+        
+        .terminal-input::placeholder {
+            color: #004400;
+        }
+        
+        .message {
+            margin: 5px 0;
+            padding: 2px 0;
+        }
+        
+        .user-message {
+            color: #00ffff;
+        }
+        
+        .ai-message {
+            color: #00ff00;
+            margin-left: 0;
+        }
+        
+        .system-message {
+            color: #ffff00;
+            font-style: italic;
+        }
+        
+        .error-message {
+            color: #ff0000;
+        }
+        
+        .waiting-animation {
+            color: #666;
+            font-style: italic;
+        }
+        
+        .waiting-dots::after {
+            content: '';
+            animation: dots 1.5s infinite;
+        }
+        
+        @keyframes dots {
+            0% { content: ''; }
+            25% { content: '.'; }
+            50% { content: '..'; }
+            75% { content: '...'; }
+            100% { content: ''; }
+        }
+        
+        /* Hide scrollbar for clean look */
+        .terminal-output {
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+        
+        .terminal-output::-webkit-scrollbar {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="terminal-container">
+        <div class="terminal-output" id="terminal-output">
+            <!-- Messages will appear here -->
+        </div>
+        
+        <div class="terminal-input-container">
+            <span class="prompt">user@terminal:~$</span>
+            <input type="text" class="terminal-input" id="terminal-input" placeholder="">
+        </div>
+    </div>
+
+    <script>
+        const terminalOutput = document.getElementById('terminal-output');
+        const terminalInput = document.getElementById('terminal-input');
+        
+        // Set this to your Vercel app URL or other proxy
+        const API_ENDPOINT = '/api/chat'; // For Vercel deployment
+        // const API_ENDPOINT = 'https://yourapp.vercel.app/api/chat'; // For GitHub Pages
+        
+        function addMessage(type, content, typeEffect = false) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}-message`;
+            
+            if (typeEffect) {
+                let i = 0;
+                const typeWriter = () => {
+                    if (i < content.length) {
+                        messageDiv.innerHTML += content.charAt(i);
+                        i++;
+                        setTimeout(typeWriter, Math.random() * 30 + 10);
+                    }
+                };
+                terminalOutput.appendChild(messageDiv);
+                typeWriter();
+            } else {
+                messageDiv.innerHTML = content;
+                terminalOutput.appendChild(messageDiv);
+            }
+            
+            terminalOutput.scrollTop = terminalOutput.scrollHeight;
+        }
+        
+        async function sendMessage() {
+            const message = terminalInput.value.trim();
+            if (!message) return;
+            
+            // Clear commands
+            if (message.toLowerCase() === 'clear') {
+                terminalOutput.innerHTML = '';
+                terminalInput.value = '';
+                return;
+            }
+            
+            // Display user message
+            addMessage('user', `user@terminal:~$ ${message}`);
+            terminalInput.value = '';
+            
+            // Show waiting animation
+            const waitingDiv = document.createElement('div');
+            waitingDiv.className = 'message waiting-animation waiting-dots';
+            waitingDiv.innerHTML = 'thinking';
+            terminalOutput.appendChild(waitingDiv);
+            terminalOutput.scrollTop = terminalOutput.scrollHeight;
+            
+            try {
+                const response = await fetch(API_ENDPOINT, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        message: message
+                    })
+                });
+                
+                // Remove waiting animation
+                waitingDiv.remove();
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || `${response.status}: request failed`);
+                }
+                
+                const data = await response.json();
+                const aiResponse = data.content[0].text;
+                addMessage('ai', aiResponse, true);
+                
+            } catch (error) {
+                // Remove waiting animation on error too
+                waitingDiv.remove();
+                addMessage('error', `error: ${error.message}`);
+            }
+        }
+        
+        // Event listeners
+        terminalInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+        
+        // Focus on input when page loads
+        terminalInput.focus();
+    </script>
+</body>
+</html>
