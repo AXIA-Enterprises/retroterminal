@@ -4,6 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Terminal</title>
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="assets/favicon.png">
+    <link rel="shortcut icon" type="image/png" href="assets/favicon.png">
+    
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono:wght@400&display=swap');
         
@@ -137,7 +142,6 @@
         
         // Set this to your Vercel app URL or other proxy
         const API_ENDPOINT = '/api/chat'; // For Vercel deployment
-        // const API_ENDPOINT = 'https://yourapp.vercel.app/api/chat'; // For GitHub Pages
         
         function addMessage(type, content, typeEffect = false) {
             const messageDiv = document.createElement('div');
