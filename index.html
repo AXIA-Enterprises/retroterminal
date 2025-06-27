@@ -122,6 +122,16 @@
         .terminal-output::-webkit-scrollbar {
             display: none;
         }
+        
+        /* Mobile adjustments */
+        @media (max-width: 768px) {
+            .terminal-output {
+                padding: 10px;
+            }
+            .terminal-input-container {
+                padding: 10px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -132,13 +142,13 @@
         
         <div class="terminal-input-container">
             <span class="prompt">user@terminal:~$</span>
-            <input type="text" class="terminal-input" id="terminal-input" placeholder="">
+            <input type="text" class="terminal-input" id="terminal-input" placeholder="" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
         </div>
     </div>
 
     <script>
         const terminalOutput = document.getElementById('terminal-output');
-        const terminalInput = document.getElementById('terminal-input');
+        const terminalInput = document.getElementById('坊terminal-input');
         
         // Set this to your Vercel app URL or other proxy
         const API_ENDPOINT = '/api/chat'; // For Vercel deployment
