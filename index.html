@@ -4,20 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Retro Terminal</title>
-    
-    <!-- Favicon -->
     <link rel="icon" type="image/png" href="assets/favicon.png">
     <link rel="shortcut icon" type="image/png" href="assets/favicon.png">
-    
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Share+Tech_Mono:wght@400&display=swap');
-        
+        @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono:wght@400&display=swap');
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
-        
         body {
             background: #000;
             color: #00ff00;
@@ -26,7 +21,6 @@
             line-height: 1.5;
             overflow: hidden;
         }
-        
         .terminal-container {
             height: 100vh;
             display: flex;
@@ -36,17 +30,13 @@
                 linear-gradient(0deg, transparent 49%, rgba(0,255,0,0.03) 50%, transparent 51%);
             background-size: 100% 100%, 100% 2px;
         }
-        
         .terminal-output {
             flex: 1;
             padding: 20px;
             overflow-y: auto;
             background: rgba(0,0,0,0.8);
-            /* Scan lines for retro effect */
-            background-image: linear-gradient(rgba(0, 255, 0, 0.05) 1px, transparent 1px);
-            background-size: 100% 2px;
+            position: relative;
         }
-        
         .terminal-input-container {
             padding: 20px;
             background: rgba(0,0,0,0.9);
@@ -54,12 +44,10 @@
             align-items: center;
             gap: 10px;
         }
-        
         .prompt {
             color: #00ff00;
             text-shadow: 0 0 5px #00ff00;
         }
-        
         .terminal-input {
             flex: 1;
             background: transparent;
@@ -69,51 +57,35 @@
             font-size: inherit;
             outline: none;
             caret-color: #00ff00;
-            /* Blinking cursor animation */
-            animation: blink 1s step-end infinite;
         }
-        
-        @keyframes blink {
-            50% { caret-color: transparent; }
-        }
-        
         .terminal-input::placeholder {
             color: #004400;
         }
-        
         .message {
             margin: 5px 0;
             padding: 2px 0;
         }
-        
         .user-message {
             color: #00ff00;
         }
-        
         .ai-message {
             color: #00ffff;
-            margin-left: 0;
         }
-        
         .system-message {
             color: #ffff00;
             font-style: italic;
         }
-        
         .error-message {
             color: #ff0000;
         }
-        
         .waiting-animation {
             color: #666;
             font-style: italic;
         }
-        
         .waiting-dots::after {
             content: '';
             animation: dots 1.5s infinite;
         }
-        
         @keyframes dots {
             0% { content: ''; }
             25% { content: '.'; }
@@ -121,34 +93,31 @@
             75% { content: '...'; }
             100% { content: ''; }
         }
-        
-        /* Hide scrollbar for clean look */
+        .matrix-effect {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 10;
+        }
         .terminal-output {
             scrollbar-width: none;
             -ms-overflow-style: none;
         }
-        
         .terminal-output::-webkit-scrollbar {
             display: none;
         }
-        
-        /* Mobile adjustments */
         @media (max-width: 768px) {
-            .terminal-output {
-                padding: 10px;
-            }
-            .terminal-input-container {
-                padding: 10px;
-            }
+            .terminal-output { padding: 10px; }
+            .terminal-input-container { padding: 10px; }
         }
     </style>
 </head>
 <body>
     <div class="terminal-container">
-        <div class="terminal-output" id="terminal-output">
-            <!-- Messages will appear here -->
-        </div>
-        
+        <div class="terminal-output" id="terminal-output"></div>
         <div class="terminal-input-container">
             <span class="prompt">user@terminal:~$</span>
             <input type="text" class="terminal-input" id="terminal-input" placeholder="" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
@@ -158,34 +127,26 @@
     <script>
         const terminalOutput = document.getElementById('terminal-output');
         const terminalInput = document.getElementById('terminal-input');
-        
-        // Safety check to ensure the input element exists
+        let matrixEffect = null;
+        let matrixStartTime = 0;
+
         if (!terminalInput) {
             console.error('Terminal input element not found');
         } else {
-            // Focus on input when page loads
             terminalInput.focus();
-
-            // Refocus input when clicking anywhere in the terminal
             document.querySelector('.terminal-container').addEventListener('click', () => {
                 terminalInput.focus();
             });
-
-            // Event listener for Enter key
             terminalInput.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') {
-                    sendMessage();
-                }
+                if (e.key === 'Enter') sendMessage();
             });
         }
 
-        // Set this to your Vercel app URL or other proxy
-        const API_ENDPOINT = '/api/chat'; // For Vercel deployment
+        const API_ENDPOINT = '/api/chat';
 
         function addMessage(type, content, typeEffect = false) {
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${type}-message`;
-            
             if (typeEffect) {
                 let i = 0;
                 const typeWriter = () => {
@@ -201,59 +162,112 @@
                 messageDiv.innerHTML = content;
                 terminalOutput.appendChild(messageDiv);
             }
-            
             terminalOutput.scrollTop = terminalOutput.scrollHeight;
+        }
+
+        function startMatrixEffect() {
+            if (matrixEffect) stopMatrixEffect();
+            terminalOutput.innerHTML = '';
+            matrixEffect = document.createElement('div');
+            matrixEffect.className = 'matrix-effect';
+            terminalOutput.appendChild(matrixEffect);
+
+            const numColumns = 10;
+            const numCharsPerColumn = 30;
+            for (let i = 0; i < numColumns; i++) {
+                let column = document.createElement('div');
+                column.style.position = 'absolute';
+                column.style.left = `${i * (100 / numColumns)}%`;
+                column.style.top = '0';
+                column.style.width = `${100 / numColumns}%`;
+                column.style.height = '100%';
+                column.style.overflow = 'hidden';
+                for (let j = 0; j < numCharsPerColumn; j++) {
+                    let char = document.createElement('span');
+                    char.textContent = String.fromCharCode(33 + Math.floor(Math.random() * 94));
+                    char.style.position = 'absolute';
+                    char.style.left = '50%';
+                    char.style.top = `${j * (100 / numCharsPerColumn)}%`;
+                    char.style.transform = 'translateX(-50%)';
+                    char.style.color = `rgba(0, 255, 0, ${0.5 + Math.random() * 0.5})`;
+                    char.style.animation = `fall ${2 + Math.random() * 2}s linear infinite`;
+                    char.style.animationDelay = `${Math.random() * 2}s`;
+                    column.appendChild(char);
+                }
+                matrixEffect.appendChild(column);
+            }
+
+            if (!document.querySelector('#fall-keyframe')) {
+                let style = document.createElement('style');
+                style.id = 'fall-keyframe';
+                style.textContent = `
+                    @keyframes fall {
+                        0% { transform: translateY(-100%); }
+                        100% { transform: translateY(100%); }
+                    }
+                `;
+                document.head.appendChild(style);
+            }
+
+            terminalOutput.style.background = 'transparent';
+            matrixStartTime = Date.now();
+            terminalInput.addEventListener('keydown', stopMatrixOnKeyPress);
+            setTimeout(stopMatrixEffect, 10000); // Fallback stop after 10 seconds
+        }
+
+        function stopMatrixEffect() {
+            if (matrixEffect) {
+                matrixEffect.remove();
+                matrixEffect = null;
+                terminalOutput.style.background = 'rgba(0,0,0,0.8)';
+                terminalInput.removeEventListener('keydown', stopMatrixOnKeyPress);
+            }
+        }
+
+        function stopMatrixOnKeyPress() {
+            if (Date.now() - matrixStartTime > 3000) stopMatrixEffect();
         }
 
         async function sendMessage() {
             const message = terminalInput.value.trim();
             if (!message) return;
-            
-            // Clear command
+
             if (message.toLowerCase() === 'clear') {
                 terminalOutput.innerHTML = '';
                 terminalInput.value = '';
                 return;
             }
-            
-            // Display user message
-            addMessage('user', `user@terminal:~$ ${message}`);
-            terminalInput.value = '';
-            
-            // Show waiting animation
-            const waitingDiv = document.createElement('div');
-            waitingDiv.className = 'message waiting-animation waiting-dots';
-            waitingDiv.innerHTML = 'thinking';
-            terminalOutput.appendChild(waitingDiv);
-            terminalOutput.scrollTop = terminalOutput.scrollHeight;
-            
-            try {
-                const response = await fetch(API_ENDPOINT, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        message: message
-                    })
-                });
-                
-                // Remove waiting animation
-                waitingDiv.remove();
-                
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.error || `${response.status}: request failed`);
+
+            if (message.toLowerCase() === 'matrix') {
+                startMatrixEffect();
+                terminalInput.value = '';
+            } else {
+                addMessage('user', `user@terminal:~$ ${message}`);
+                terminalInput.value = '';
+                const waitingDiv = document.createElement('div');
+                waitingDiv.className = 'message waiting-animation waiting-dots';
+                waitingDiv.innerHTML = 'thinking';
+                terminalOutput.appendChild(waitingDiv);
+                terminalOutput.scrollTop = terminalOutput.scrollHeight;
+
+                try {
+                    const response = await fetch(API_ENDPOINT, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ message: message })
+                    });
+                    waitingDiv.remove();
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.error || `${response.status}: request failed`);
+                    }
+                    const data = await response.json();
+                    const aiResponse = data.content[0].text;
+                    addMessage('ai', aiResponse, true);
+                } catch (error) {
+                    waitingDiv.remove();
+                    addMessage('error', `error: ${error.message}`);
                 }
-                
-                const data = await response.json();
-                const aiResponse = data.content[0].text;
-                addMessage('ai', aiResponse, true);
-                
-            } catch (error) {
-                // Remove waiting animation on error
-                waitingDiv.remove();
-                addMessage('error', `error: ${error.message}`);
             }
         }
     </script>
