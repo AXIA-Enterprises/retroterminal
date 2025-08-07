@@ -297,9 +297,9 @@
         function stopMatrixOnKeyPress() {
             if (Date.now() - matrixStartTime > 3000) stopMatrixEffect();
         }
-        const terminalContainer = document.querySelector('.terminal-container');
-        terminalContainer.addEventListener('dragover', (e) => e.preventDefault());
-        terminalContainer.addEventListener('drop', (e) => {
+        // Move drag-and-drop to body for full screen support
+        document.body.addEventListener('dragover', (e) => e.preventDefault());
+        document.body.addEventListener('drop', (e) => {
             e.preventDefault();
             const file = e.dataTransfer.files[0];
             if (file) {
