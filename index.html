@@ -22,13 +22,14 @@
             --color-waiting: #666;
             --bg-gradient: rgba(0,255,0,0.1);
             --bg-line: rgba(0,255,0,0.03);
-            --color-help: #888888; /* Grey for help menu */
+            --color-help: #888888;
+            --color-verification: #ffff00;
         }
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
-            user-select: text; /* Ensure text is selectable */
+            user-select: text;
         }
         body {
             background: #000;
@@ -73,7 +74,7 @@
             gap: 10px;
             position: sticky;
             bottom: 0;
-            z-index: 1; /* Ensure above other elements */
+            z-index: 1;
         }
         .prompt {
             color: var(--color-prompt);
@@ -156,12 +157,12 @@
             left: 0;
             width: 100%;
             background: rgba(0, 0, 0, 0.7);
-            color: var(--color-help); /* Grey text */
+            color: var(--color-help);
             font-size: 12px;
             padding: 10px;
             display: none;
             z-index: 20;
-            border-top: none; /* No line */
+            border-top: none;
         }
         .command-menu ul {
             list-style: none;
@@ -177,10 +178,13 @@
 </head>
 <body>
     <div class="terminal-container">
-        <div class="terminal-output" id="terminal-output"></div>
+        <div class="terminal-output" id="terminal-output">
+            <div class="message system-message">Welcome to Retro Terminal. Please verify you are human.</div>
+            <div class="message system-message" id="math-question-container"></div>
+        </div>
         <div class="terminal-input-container">
             <span class="prompt">user@terminal:~$</span>
-            <input type="text" class="terminal-input" id="terminal-input" placeholder="" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+            <input type="text" class="terminal-input" id="terminal-input" placeholder="Enter your answer" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
             <div class="command-menu" id="command-menu">
                 <ul id="command-list"></ul>
             </div>
@@ -192,10 +196,45 @@
         const terminalInput = document.getElementById('terminal-input');
         const commandMenu = document.getElementById('command-menu');
         const commandList = document.getElementById('command-list');
+        const mathQuestionContainer = document.getElementById('math-question-container');
         let matrixEffect = null;
         let matrixStartTime = 0;
         let inputHistory = [];
         let historyIndex = -1;
+        let isVerified = false;
+
+        // Generate and display math question
+        function generateMathQuestion() {
+            const num1 = Math.floor(Math.random() * 10) + 1;
+            const num2 = Math.floor(Math.random() * 10) + 1;
+            const answer = num1 + num2;
+            mathQuestionContainer.textContent = `What is ${num1} + ${num2}?`;
+            return answer;
+        }
+
+        let correctAnswer = generateMathQuestion();
+
+        terminalInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && !isVerified) {
+                const userAnswer = parseInt(terminalInput.value.trim());
+                if (userAnswer === correctAnswer) {
+                    isVerified = true;
+                    terminalOutput.innerHTML += '<div class="message system-message">Verification successful. Terminal ready.</div>';
+                    mathQuestionContainer.remove(); // Remove the question after verification
+                    terminalInput.value = '';
+                    terminalInput.placeholder = '';
+                    terminalInput.focus();
+                } else {
+                    terminalOutput.innerHTML += '<div class="message error-message">Incorrect answer. Try again.</div>';
+                    correctAnswer = generateMathQuestion();
+                    terminalInput.value = '';
+                }
+                terminalOutput.scrollTop = terminalOutput.scrollHeight;
+            } else if (e.key === 'Enter' && isVerified) {
+                sendMessage();
+            }
+        });
+
         const commands = [
             {cmd: '/clear', desc: 'Clear the terminal screen'},
             {cmd: '/matrix', desc: 'Start the matrix rain effect'},
@@ -206,32 +245,34 @@
             {cmd: '/export', desc: 'Export chat log as TXT'},
             {cmd: '/theme', desc: 'Switch color theme (add [green/amber/blue])'}
         ];
+
+        function sanitizeInput(input) {
+            return input.replace(/<[^>]+>/g, '').replace(/script|eval|document|window/gi, '');
+        }
+
         function updateCommandMenu(filter = '') {
             commandList.innerHTML = commands
                 .filter(c => c.cmd.startsWith(filter.toLowerCase()))
                 .map(c => `<li>${c.cmd}: ${c.desc}</li>`)
                 .join('');
         }
+
         if (!terminalInput) {
             console.error('Terminal input element not found');
         } else {
             terminalInput.focus();
             document.querySelector('.terminal-container').addEventListener('click', () => {
-                terminalInput.focus();
+                if (isVerified) terminalInput.focus();
             });
             terminalInput.addEventListener('focus', () => {
                 setTimeout(() => {
                     terminalInput.scrollIntoView({ behavior: 'smooth', block: 'end' });
                     document.body.scrollLeft = 0;
                     terminalOutput.scrollLeft = 0;
-                }, 300); // Delay for keyboard to open on mobile
-            });
-            terminalInput.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') sendMessage();
-                // Placeholder for sound effect: new Audio('assets/keypress.mp3').play(); // Add your sound file
+                }, 300);
             });
             terminalInput.addEventListener('keydown', (e) => {
-                if (e.key === 'Tab') {
+                if (e.key === 'Tab' && isVerified) {
                     e.preventDefault();
                     const value = terminalInput.value.toLowerCase();
                     if (value.startsWith('/')) {
@@ -240,17 +281,17 @@
                             terminalInput.value = matching.cmd;
                         }
                     }
-                } else if (e.key === 'ArrowUp' && historyIndex < inputHistory.length - 1) {
+                } else if (e.key === 'ArrowUp' && historyIndex < inputHistory.length - 1 && isVerified) {
                     historyIndex++;
                     terminalInput.value = inputHistory[inputHistory.length - 1 - historyIndex];
-                } else if (e.key === 'ArrowDown' && historyIndex > 0) {
+                } else if (e.key === 'ArrowDown' && historyIndex > 0 && isVerified) {
                     historyIndex--;
                     terminalInput.value = inputHistory[inputHistory.length - 1 - historyIndex];
                 }
             });
             terminalInput.addEventListener('input', () => {
                 const value = terminalInput.value;
-                if (value.startsWith('/')) {
+                if (value.startsWith('/') && isVerified) {
                     updateCommandMenu(value);
                     commandMenu.style.display = commandList.children.length > 0 ? 'block' : 'none';
                 } else {
@@ -258,7 +299,9 @@
                 }
             });
         }
+
         const API_ENDPOINT = '/api/chat';
+
         function addMessage(type, content, typeEffect = false) {
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${type}-message`;
@@ -285,6 +328,7 @@
             }
             terminalOutput.scrollTop = terminalOutput.scrollHeight;
         }
+
         function startMatrixEffect() {
             if (matrixEffect) stopMatrixEffect();
             terminalOutput.innerHTML = '';
@@ -329,8 +373,9 @@
             terminalOutput.style.background = 'transparent';
             matrixStartTime = Date.now();
             terminalInput.addEventListener('keydown', stopMatrixOnKeyPress);
-            setTimeout(stopMatrixEffect, 10000); // Fallback stop after 10 seconds
+            setTimeout(stopMatrixEffect, 10000);
         }
+
         function stopMatrixEffect() {
             if (matrixEffect) {
                 matrixEffect.remove();
@@ -339,25 +384,32 @@
                 terminalInput.removeEventListener('keydown', stopMatrixOnKeyPress);
             }
         }
+
         function stopMatrixOnKeyPress() {
             if (Date.now() - matrixStartTime > 3000) stopMatrixEffect();
         }
-        // Move drag-and-drop to body for full screen support
+
         document.body.addEventListener('dragover', (e) => e.preventDefault());
         document.body.addEventListener('drop', (e) => {
             e.preventDefault();
-            const file = e.dataTransfer.files[0];
-            if (file) {
-                addMessage('system', 'File dropped: ' + file.name);
-                processFile(file);
+            if (isVerified) {
+                const file = e.dataTransfer.files[0];
+                if (file) {
+                    addMessage('system', 'File dropped: ' + file.name);
+                    processFile(file);
+                }
             }
         });
+
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.5.136/pdf.worker.min.js';
+
         async function sendMessage() {
-            const userInput = terminalInput.value.trim();
+            if (!isVerified) return;
+            let userInput = terminalInput.value.trim();
+            userInput = sanitizeInput(userInput);
             const lowerInput = userInput.toLowerCase();
             if (!userInput) return;
-            commandMenu.style.display = 'none'; // Hide menu on submit
+            commandMenu.style.display = 'none';
             inputHistory.push(userInput);
             historyIndex = -1;
             addMessage('user', `user@terminal:~$ ${userInput}`);
@@ -415,7 +467,7 @@
                             '--bg-line': 'rgba(0,191,255,0.03)'
                         };
                         break;
-                    default: // green
+                    default:
                         colors = {
                             '--color-user': '#00ff00',
                             '--color-ai': '#00ffff',
@@ -468,8 +520,7 @@
                     if (file) processFile(file, lang);
                 };
                 return;
-            } 
-            // Regular chat message (non-command)
+            }
             terminalInput.value = '';
             const waitingDiv = document.createElement('div');
             waitingDiv.className = 'message waiting-animation waiting-dots';
@@ -495,7 +546,9 @@
                 addMessage('error', `error: ${error.message}`);
             }
         }
+
         async function processFile(file, lang = 'eng') {
+            if (!isVerified) return;
             addMessage('system', 'Processing file...');
             const ext = file.name.split('.').pop().toLowerCase();
             try {
@@ -523,7 +576,7 @@
                         table = 'No data found in CSV.';
                     }
                     extractedContent = `CSV content as table:\n${table}`;
-                } else if (ext === 'docx' || ext === 'doc') { // Assuming mammoth supports docx; doc may not work well
+                } else if (ext === 'docx' || ext === 'doc') {
                     const arrayBuffer = await file.arrayBuffer();
                     const result = await mammoth.extractRawText({arrayBuffer});
                     extractedContent = result.value;
