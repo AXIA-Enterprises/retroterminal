@@ -199,12 +199,12 @@
         const commands = [
             {cmd: '/clear', desc: 'Clear the terminal screen'},
             {cmd: '/matrix', desc: 'Start the matrix rain effect'},
-            {cmd: '/ocr [lang]', desc: 'Perform OCR on an uploaded image or PDF (optional lang e.g., eng, fra)'},
+            {cmd: '/ocr', desc: 'Perform OCR on an uploaded image or PDF (optional [lang] e.g., eng, fra)'},
             {cmd: '/upload', desc: 'Upload a file for processing (supports TXT, CSV, DOCX, images, PDFs)'},
             {cmd: '/help', desc: 'Show this help menu'},
-            {cmd: '/weather [city]', desc: 'Get current weather for a city'},
+            {cmd: '/weather', desc: 'Get current weather for a city (add [city])'},
             {cmd: '/export', desc: 'Export chat log as TXT'},
-            {cmd: '/theme [green/amber/blue]', desc: 'Switch color theme'}
+            {cmd: '/theme', desc: 'Switch color theme (add [green/amber/blue])'}
         ];
         function updateCommandMenu(filter = '') {
             commandList.innerHTML = commands
@@ -441,7 +441,7 @@
                     const res = await fetch(`/api/weather?city=${encodeURIComponent(city)}`);
                     const data = await res.json();
                     if (!res.ok) throw new Error(data.error || 'Weather fetch failed');
-                    addMessage('ai', `Weather in ${data.name}: ${data.main.temp}°C, ${data.weather[0].description}`);
+                    addMessage('ai', `Weather in ${data.name}: ${data.main.temp}°F, ${data.weather[0].description}`);
                 } catch (e) {
                     addMessage('error', 'Weather fetch failed: ' + e.message);
                 }
