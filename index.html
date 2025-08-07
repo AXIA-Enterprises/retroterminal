@@ -148,6 +148,8 @@
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.1.0/tesseract.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.5.136/pdf.min.js"></script>
+    <script src="https://unpkg.com/mammoth/mammoth.browser.min.js"></script>
+    <script src="https://unpkg.com/papaparse/papaparse.min.js"></script>
 </head>
 <body>
     <div class="terminal-container">
@@ -159,7 +161,7 @@
                 <ul id="command-list"></ul>
             </div>
         </div>
-        <input type="file" id="file-upload" style="display: none;" accept="image/*,application/pdf">
+        <input type="file" id="file-upload" style="display: none;" accept="image/*,application/pdf,text/plain,text/csv,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document">
     </div>
     <script>
         const terminalOutput = document.getElementById('terminal-output');
@@ -174,7 +176,7 @@
             {cmd: '/clear', desc: 'Clear the terminal screen'},
             {cmd: '/matrix', desc: 'Start the matrix rain effect'},
             {cmd: '/ocr [lang]', desc: 'Perform OCR on an uploaded image or PDF (optional lang e.g., eng, fra)'},
-            {cmd: '/upload', desc: 'Upload a file for processing (e.g., OCR)'},
+            {cmd: '/upload', desc: 'Upload a file for processing (supports TXT, CSV, DOCX, images, PDFs)'},
             {cmd: '/help', desc: 'Show this help menu'},
             {cmd: '/weather [city]', desc: 'Get current weather for a city'},
             {cmd: '/export', desc: 'Export chat log as TXT'},
@@ -453,55 +455,93 @@
             }
         }
         async function processFile(file, lang = 'eng') {
-            const progressDiv = document.createElement('div');
-            progressDiv.className = 'message system-message';
-            progressDiv.innerHTML = 'Processing file... 0%';
-            terminalOutput.appendChild(progressDiv);
-            terminalOutput.scrollTop = terminalOutput.scrollHeight;
-            let lastProgress = 0;
-            const logger = (m) => {
-                if (m.status === 'recognizing text') {
-                    const progress = Math.floor(m.progress * 100);
-                    if (progress >= lastProgress + 10 || progress === 100) {
-                        lastProgress = progress;
-                        progressDiv.innerHTML = `Processing file... ${progress}%`;
-                    }
-                }
-            };
+            addMessage('system', 'Processing file...');
+            const ext = file.name.split('.').pop().toLowerCase();
             try {
-                let extractedText = '';
-                if (file.type === 'application/pdf') {
-                    extractedText = await ocrPdf(file, lang, logger);
+                let extractedContent = '';
+                if (ext === 'txt') {
+                    const reader = new FileReader();
+                    reader.readAsText(file);
+                    await new Promise((resolve) => reader.onload = resolve);
+                    extractedContent = reader.result;
+                } else if (ext === 'csv') {
+                    const results = await new Promise((resolve, reject) => {
+                        Papa.parse(file, {
+                            header: true,
+                            complete: resolve,
+                            error: reject
+                        });
+                    });
+                    let table = '';
+                    if (results.meta.fields) {
+                        table = results.meta.fields.join(' | ') + '\n' + results.meta.fields.map(() => '---').join(' | ') + '\n';
+                        results.data.forEach(row => {
+                            table += Object.values(row).join(' | ') + '\n';
+                        });
+                    } else {
+                        table = 'No data found in CSV.';
+                    }
+                    extractedContent = `CSV content as table:\n${table}`;
+                } else if (ext === 'docx' || ext === 'doc') { // Assuming mammoth supports docx; doc may not work well
+                    const arrayBuffer = await file.arrayBuffer();
+                    const result = await mammoth.extractRawText({arrayBuffer});
+                    extractedContent = result.value;
+                } else if (file.type === 'application/pdf') {
+                    const progressDiv = document.createElement('div');
+                    progressDiv.className = 'message system-message';
+                    progressDiv.innerHTML = 'OCR processing... 0%';
+                    terminalOutput.appendChild(progressDiv);
+                    terminalOutput.scrollTop = terminalOutput.scrollHeight;
+                    let lastProgress = 0;
+                    const logger = (m) => {
+                        if (m.status === 'recognizing text') {
+                            const progress = Math.floor(m.progress * 100);
+                            if (progress >= lastProgress + 10 || progress === 100) {
+                                lastProgress = progress;
+                                progressDiv.innerHTML = `OCR processing... ${progress}%`;
+                            }
+                        }
+                    };
+                    const pdf = await pdfjsLib.getDocument(URL.createObjectURL(file)).promise;
+                    let fullText = '';
+                    for (let i = 1; i <= pdf.numPages; i++) {
+                        const page = await pdf.getPage(i);
+                        const viewport = page.getViewport({ scale: 1.5 });
+                        const canvas = document.createElement('canvas');
+                        canvas.height = viewport.height;
+                        canvas.width = viewport.width;
+                        await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+                        const { data: { text } } = await Tesseract.recognize(canvas.toDataURL(), lang, { logger });
+                        fullText += `Page ${i}: ${text}\n\n`;
+                    }
+                    progressDiv.remove();
+                    extractedContent = fullText;
                 } else if (file.type.startsWith('image/')) {
-                    extractedText = await ocrImage(file, lang, logger);
+                    const progressDiv = document.createElement('div');
+                    progressDiv.className = 'message system-message';
+                    progressDiv.innerHTML = 'OCR processing... 0%';
+                    terminalOutput.appendChild(progressDiv);
+                    terminalOutput.scrollTop = terminalOutput.scrollHeight;
+                    let lastProgress = 0;
+                    const logger = (m) => {
+                        if (m.status === 'recognizing text') {
+                            const progress = Math.floor(m.progress * 100);
+                            if (progress >= lastProgress + 10 || progress === 100) {
+                                lastProgress = progress;
+                                progressDiv.innerHTML = `OCR processing... ${progress}%`;
+                            }
+                        }
+                    };
+                    const { data: { text } } = await Tesseract.recognize(file, lang, { logger });
+                    progressDiv.remove();
+                    extractedContent = text;
                 } else {
-                    throw new Error('Unsupported file type. Use images or PDFs.');
+                    throw new Error('Unsupported file type. Supported: TXT, CSV, DOCX, images, PDFs.');
                 }
-                progressDiv.remove();
-                addMessage('ai', `Extracted text: ${extractedText}`, true);
+                addMessage('ai', `Extracted content: ${extractedContent}`, true);
             } catch (error) {
-                progressDiv.remove();
                 addMessage('error', `Error: ${error.message}`);
             }
-        }
-        async function ocrImage(file, lang, logger) {
-            const { data: { text } } = await Tesseract.recognize(file, lang, { logger });
-            return text;
-        }
-        async function ocrPdf(file, lang, logger) {
-            const pdf = await pdfjsLib.getDocument(URL.createObjectURL(file)).promise;
-            let fullText = '';
-            for (let i = 1; i <= pdf.numPages; i++) {
-                const page = await pdf.getPage(i);
-                const viewport = page.getViewport({ scale: 1.5 });
-                const canvas = document.createElement('canvas');
-                canvas.height = viewport.height;
-                canvas.width = viewport.width;
-                await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
-                const { data: { text } } = await Tesseract.recognize(canvas.toDataURL(), lang, { logger });
-                fullText += `Page ${i}: ${text}\n\n`;
-            }
-            return fullText;
         }
     </script>
 </body>
