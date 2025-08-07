@@ -1,4 +1,4 @@
-#Retro Terminal
+# Retro Terminal
 
 A retro-styled terminal interface built with HTML, CSS, and JavaScript, featuring a command-line experience with various functionalities. Provided by AXIA Enterprises.
 
