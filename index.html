@@ -8,6 +8,18 @@
     <link rel="shortcut icon" type="image/png" href="assets/favicon.png">
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono:wght@400&display=swap');
+        :root {
+            --color-user: #00ff00;
+            --color-ai: #00ffff;
+            --color-system: #ffff00;
+            --color-error: #ff0000;
+            --color-prompt: #00ff00;
+            --color-shadow: #00ff00;
+            --color-placeholder: #004400;
+            --color-waiting: #666;
+            --bg-gradient: rgba(0,255,0,0.1);
+            --bg-line: rgba(0,255,0,0.03);
+        }
         * {
             margin: 0;
             padding: 0;
@@ -15,7 +27,7 @@
         }
         body {
             background: #000;
-            color: #00ff00;
+            color: var(--color-user);
             font-family: 'Share Tech Mono', monospace;
             font-size: 16px;
             line-height: 1.5;
@@ -25,9 +37,9 @@
             height: 100vh;
             display: flex;
             flex-direction: column;
-            background: 
-                radial-gradient(ellipse at center, rgba(0,255,0,0.1) 0%, transparent 70%),
-                linear-gradient(0deg, transparent 49%, rgba(0,255,0,0.03) 50%, transparent 51%);
+            background:
+                radial-gradient(ellipse at center, var(--bg-gradient) 0%, transparent 70%),
+                linear-gradient(0deg, transparent 49%, var(--bg-line) 50%, transparent 51%);
             background-size: 100% 100%, 100% 2px;
         }
         .terminal-output {
@@ -43,43 +55,44 @@
             display: flex;
             align-items: center;
             gap: 10px;
+            position: relative;
         }
         .prompt {
-            color: #00ff00;
-            text-shadow: 0 0 5px #00ff00;
+            color: var(--color-prompt);
+            text-shadow: 0 0 5px var(--color-shadow);
         }
         .terminal-input {
             flex: 1;
             background: transparent;
             border: none;
-            color: #00ff00;
+            color: var(--color-user);
             font-family: inherit;
             font-size: inherit;
             outline: none;
-            caret-color: #00ff00;
+            caret-color: var(--color-user);
         }
         .terminal-input::placeholder {
-            color: #004400;
+            color: var(--color-placeholder);
         }
         .message {
             margin: 5px 0;
             padding: 2px 0;
         }
         .user-message {
-            color: #00ff00;
+            color: var(--color-user);
         }
         .ai-message {
-            color: #00ffff;
+            color: var(--color-ai);
         }
         .system-message {
-            color: #ffff00;
+            color: var(--color-system);
             font-style: italic;
         }
         .error-message {
-            color: #ff0000;
+            color: var(--color-error);
         }
         .waiting-animation {
-            color: #666;
+            color: var(--color-waiting);
             font-style: italic;
         }
         .waiting-dots::after {
@@ -113,7 +126,28 @@
             .terminal-output { padding: 10px; }
             .terminal-input-container { padding: 10px; }
         }
+        .command-menu {
+            position: absolute;
+            bottom: 100%;
+            left: 0;
+            width: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            color: var(--color-user);
+            font-size: 12px;
+            padding: 10px;
+            display: none;
+            z-index: 20;
+            border-top: 1px solid var(--color-user);
+        }
+        .command-menu ul {
+            list-style: none;
+        }
+        .command-menu li {
+            margin-bottom: 5px;
+        }
     </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.1.0/tesseract.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.5.136/pdf.min.js"></script>
 </head>
 <body>
     <div class="terminal-container">
@@ -121,15 +155,37 @@
         <div class="terminal-input-container">
             <span class="prompt">user@terminal:~$</span>
             <input type="text" class="terminal-input" id="terminal-input" placeholder="" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+            <div class="command-menu" id="command-menu">
+                <ul id="command-list"></ul>
+            </div>
         </div>
+        <input type="file" id="file-upload" style="display: none;" accept="image/*,application/pdf">
     </div>
-
     <script>
         const terminalOutput = document.getElementById('terminal-output');
         const terminalInput = document.getElementById('terminal-input');
+        const commandMenu = document.getElementById('command-menu');
+        const commandList = document.getElementById('command-list');
         let matrixEffect = null;
         let matrixStartTime = 0;
-
+        let inputHistory = [];
+        let historyIndex = -1;
+        const commands = [
+            {cmd: '/clear', desc: 'Clear the terminal screen'},
+            {cmd: '/matrix', desc: 'Start the matrix rain effect'},
+            {cmd: '/ocr [lang]', desc: 'Perform OCR on an uploaded image or PDF (optional lang e.g., eng, fra)'},
+            {cmd: '/upload', desc: 'Upload a file for processing (e.g., OCR)'},
+            {cmd: '/help', desc: 'Show this help menu'},
+            {cmd: '/weather [city]', desc: 'Get current weather for a city'},
+            {cmd: '/export', desc: 'Export chat log as TXT'},
+            {cmd: '/theme [green/amber/blue]', desc: 'Switch color theme'}
+        ];
+        function updateCommandMenu(filter = '') {
+            commandList.innerHTML = commands
+                .filter(c => c.cmd.startsWith(filter.toLowerCase()))
+                .map(c => `<li>${c.cmd}: ${c.desc}</li>`)
+                .join('');
+        }
         if (!terminalInput) {
             console.error('Terminal input element not found');
         } else {
@@ -139,14 +195,34 @@
             });
             terminalInput.addEventListener('keypress', (e) => {
                 if (e.key === 'Enter') sendMessage();
+                // Placeholder for sound effect: new Audio('assets/keypress.mp3').play(); // Add your sound file
+            });
+            terminalInput.addEventListener('keydown', (e) => {
+                if (e.key === 'ArrowUp' && historyIndex < inputHistory.length - 1) {
+                    historyIndex++;
+                    terminalInput.value = inputHistory[inputHistory.length - 1 - historyIndex];
+                } else if (e.key === 'ArrowDown' && historyIndex > 0) {
+                    historyIndex--;
+                    terminalInput.value = inputHistory[inputHistory.length - 1 - historyIndex];
+                }
+            });
+            terminalInput.addEventListener('input', () => {
+                const value = terminalInput.value;
+                if (value.startsWith('/')) {
+                    updateCommandMenu(value);
+                    commandMenu.style.display = commandList.children.length > 0 ? 'block' : 'none';
+                } else {
+                    commandMenu.style.display = 'none';
+                }
             });
         }
-
         const API_ENDPOINT = '/api/chat';
-
         function addMessage(type, content, typeEffect = false) {
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${type}-message`;
+            if (type === 'ai') {
+                content = content.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" style="color: var(--color-ai);">$1</a>');
+            }
             if (typeEffect) {
                 let i = 0;
                 const typeWriter = () => {
@@ -164,14 +240,12 @@
             }
             terminalOutput.scrollTop = terminalOutput.scrollHeight;
         }
-
         function startMatrixEffect() {
             if (matrixEffect) stopMatrixEffect();
             terminalOutput.innerHTML = '';
             matrixEffect = document.createElement('div');
             matrixEffect.className = 'matrix-effect';
             terminalOutput.appendChild(matrixEffect);
-
             const numColumns = 10;
             const numCharsPerColumn = 30;
             for (let i = 0; i < numColumns; i++) {
@@ -196,7 +270,6 @@
                 }
                 matrixEffect.appendChild(column);
             }
-
             if (!document.querySelector('#fall-keyframe')) {
                 let style = document.createElement('style');
                 style.id = 'fall-keyframe';
@@ -208,13 +281,11 @@
                 `;
                 document.head.appendChild(style);
             }
-
             terminalOutput.style.background = 'transparent';
             matrixStartTime = Date.now();
             terminalInput.addEventListener('keydown', stopMatrixOnKeyPress);
             setTimeout(stopMatrixEffect, 10000); // Fallback stop after 10 seconds
         }
-
         function stopMatrixEffect() {
             if (matrixEffect) {
                 matrixEffect.remove();
@@ -223,52 +294,214 @@
                 terminalInput.removeEventListener('keydown', stopMatrixOnKeyPress);
             }
         }
-
         function stopMatrixOnKeyPress() {
             if (Date.now() - matrixStartTime > 3000) stopMatrixEffect();
         }
-
+        const terminalContainer = document.querySelector('.terminal-container');
+        terminalContainer.addEventListener('dragover', (e) => e.preventDefault());
+        terminalContainer.addEventListener('drop', (e) => {
+            e.preventDefault();
+            const file = e.dataTransfer.files[0];
+            if (file) {
+                addMessage('system', 'File dropped: ' + file.name);
+                processFile(file);
+            }
+        });
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.5.136/pdf.worker.min.js';
         async function sendMessage() {
-            const message = terminalInput.value.trim();
-            if (!message) return;
-
-            if (message.toLowerCase() === 'clear') {
+            const userInput = terminalInput.value.trim();
+            const lowerInput = userInput.toLowerCase();
+            if (!userInput) return;
+            commandMenu.style.display = 'none'; // Hide menu on submit
+            inputHistory.push(userInput);
+            historyIndex = -1;
+            if (lowerInput === '/clear') {
                 terminalOutput.innerHTML = '';
                 terminalInput.value = '';
                 return;
             }
-
-            if (message.toLowerCase() === 'matrix') {
+            if (lowerInput === '/matrix') {
                 startMatrixEffect();
                 terminalInput.value = '';
-            } else {
-                addMessage('user', `user@terminal:~$ ${message}`);
-                terminalInput.value = '';
-                const waitingDiv = document.createElement('div');
-                waitingDiv.className = 'message waiting-animation waiting-dots';
-                waitingDiv.innerHTML = 'thinking';
-                terminalOutput.appendChild(waitingDiv);
-                terminalOutput.scrollTop = terminalOutput.scrollHeight;
-
-                try {
-                    const response = await fetch(API_ENDPOINT, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ message: message })
-                    });
-                    waitingDiv.remove();
-                    if (!response.ok) {
-                        const errorData = await response.json();
-                        throw new Error(errorData.error || `${response.status}: request failed`);
-                    }
-                    const data = await response.json();
-                    const aiResponse = data.content[0].text;
-                    addMessage('ai', aiResponse, true);
-                } catch (error) {
-                    waitingDiv.remove();
-                    addMessage('error', `error: ${error.message}`);
-                }
+                return;
             }
+            if (lowerInput === '/help') {
+                addMessage('system', commands.map(c => `- ${c.cmd}: ${c.desc}`).join('\n'));
+                terminalInput.value = '';
+                return;
+            }
+            if (lowerInput === '/export') {
+                const log = Array.from(terminalOutput.querySelectorAll('.message')).map(m => m.innerText).join('\n');
+                const blob = new Blob([log], { type: 'text/plain' });
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = 'chat_log.txt';
+                a.click();
+                terminalInput.value = '';
+                return;
+            }
+            if (lowerInput.startsWith('/theme')) {
+                const theme = lowerInput.split(' ')[1] || 'green';
+                let colors;
+                switch (theme) {
+                    case 'amber':
+                        colors = {
+                            '--color-user': '#ff9900',
+                            '--color-ai': '#ffd700',
+                            '--color-system': '#ffff99',
+                            '--color-prompt': '#ff9900',
+                            '--color-shadow': '#ff9900',
+                            '--color-placeholder': '#663300',
+                            '--bg-gradient': 'rgba(255,153,0,0.1)',
+                            '--bg-line': 'rgba(255,153,0,0.03)'
+                        };
+                        break;
+                    case 'blue':
+                        colors = {
+                            '--color-user': '#00bfff',
+                            '--color-ai': '#87cefa',
+                            '--color-system': '#add8e6',
+                            '--color-prompt': '#00bfff',
+                            '--color-shadow': '#00bfff',
+                            '--color-placeholder': '#004466',
+                            '--bg-gradient': 'rgba(0,191,255,0.1)',
+                            '--bg-line': 'rgba(0,191,255,0.03)'
+                        };
+                        break;
+                    default: // green
+                        colors = {
+                            '--color-user': '#00ff00',
+                            '--color-ai': '#00ffff',
+                            '--color-system': '#ffff00',
+                            '--color-prompt': '#00ff00',
+                            '--color-shadow': '#00ff00',
+                            '--color-placeholder': '#004400',
+                            '--bg-gradient': 'rgba(0,255,0,0.1)',
+                            '--bg-line': 'rgba(0,255,0,0.03)'
+                        };
+                }
+                for (const [key, value] of Object.entries(colors)) {
+                    document.documentElement.style.setProperty(key, value);
+                }
+                addMessage('system', `Theme switched to ${theme}`);
+                terminalInput.value = '';
+                return;
+            }
+            if (lowerInput.startsWith('/weather')) {
+                const city = userInput.split(' ').slice(1).join(' ') || 'London';
+                addMessage('user', `user@terminal:~$ ${userInput}`);
+                terminalInput.value = '';
+                try {
+                    const res = await fetch(`/api/weather?city=${encodeURIComponent(city)}`);
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.error || 'Weather fetch failed');
+                    addMessage('ai', `Weather in ${data.name}: ${data.main.temp}°C, ${data.weather[0].description}`);
+                } catch (e) {
+                    addMessage('error', 'Weather fetch failed: ' + e.message);
+                }
+                return;
+            }
+            if (lowerInput === '/upload') {
+                addMessage('user', `user@terminal:~$ ${userInput}`);
+                terminalInput.value = '';
+                document.getElementById('file-upload').click();
+                document.getElementById('file-upload').onchange = (e) => {
+                    const file = e.target.files[0];
+                    if (file) {
+                        addMessage('system', 'File uploaded: ' + file.name);
+                        processFile(file);
+                    }
+                };
+                return;
+            }
+            if (lowerInput.startsWith('/ocr')) {
+                addMessage('user', `user@terminal:~$ ${userInput}`);
+                const lang = lowerInput.split(' ')[1] || 'eng';
+                terminalInput.value = '';
+                document.getElementById('file-upload').click();
+                document.getElementById('file-upload').onchange = (e) => {
+                    const file = e.target.files[0];
+                    if (file) processFile(file, lang);
+                };
+                return;
+            } 
+            // Regular chat message (non-command)
+            addMessage('user', `user@terminal:~$ ${userInput}`);
+            terminalInput.value = '';
+            const waitingDiv = document.createElement('div');
+            waitingDiv.className = 'message waiting-animation waiting-dots';
+            waitingDiv.innerHTML = 'thinking';
+            terminalOutput.appendChild(waitingDiv);
+            terminalOutput.scrollTop = terminalOutput.scrollHeight;
+            try {
+                const response = await fetch(API_ENDPOINT, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: userInput })
+                });
+                waitingDiv.remove();
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || `${response.status}: request failed`);
+                }
+                const data = await response.json();
+                const aiResponse = data.content[0].text;
+                addMessage('ai', aiResponse, true);
+            } catch (error) {
+                waitingDiv.remove();
+                addMessage('error', `error: ${error.message}`);
+            }
+        }
+        async function processFile(file, lang = 'eng') {
+            const progressDiv = document.createElement('div');
+            progressDiv.className = 'message system-message';
+            progressDiv.innerHTML = 'Processing file... 0%';
+            terminalOutput.appendChild(progressDiv);
+            terminalOutput.scrollTop = terminalOutput.scrollHeight;
+            let lastProgress = 0;
+            const logger = (m) => {
+                if (m.status === 'recognizing text') {
+                    const progress = Math.floor(m.progress * 100);
+                    if (progress >= lastProgress + 10 || progress === 100) {
+                        lastProgress = progress;
+                        progressDiv.innerHTML = `Processing file... ${progress}%`;
+                    }
+                }
+            };
+            try {
+                let extractedText = '';
+                if (file.type === 'application/pdf') {
+                    extractedText = await ocrPdf(file, lang, logger);
+                } else if (file.type.startsWith('image/')) {
+                    extractedText = await ocrImage(file, lang, logger);
+                } else {
+                    throw new Error('Unsupported file type. Use images or PDFs.');
+                }
+                progressDiv.remove();
+                addMessage('ai', `Extracted text: ${extractedText}`, true);
+            } catch (error) {
+                progressDiv.remove();
+                addMessage('error', `Error: ${error.message}`);
+            }
+        }
+        async function ocrImage(file, lang, logger) {
+            const { data: { text } } = await Tesseract.recognize(file, lang, { logger });
+            return text;
+        }
+        async function ocrPdf(file, lang, logger) {
+            const pdf = await pdfjsLib.getDocument(URL.createObjectURL(file)).promise;
+            let fullText = '';
+            for (let i = 1; i <= pdf.numPages; i++) {
+                const page = await pdf.getPage(i);
+                const viewport = page.getViewport({ scale: 1.5 });
+                const canvas = document.createElement('canvas');
+                canvas.height = viewport.height;
+                canvas.width = viewport.width;
+                await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+                const { data: { text } } = await Tesseract.recognize(canvas.toDataURL(), lang, { logger });
+                fullText += `Page ${i}: ${text}\n\n`;
+            }
+            return fullText;
         }
     </script>
 </body>
