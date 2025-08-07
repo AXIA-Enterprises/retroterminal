@@ -5,7 +5,7 @@ module.exports = async (req, res) => {
             return res.status(400).json({ error: 'City is required' });
         }
         const apiKey = process.env.WEATHER_API_KEY;
-        const url = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(city)}&appid=${apiKey}&units=metric`;
+        const url = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(city)}&appid=${apiKey}&units=imperial`;
         try {
             const response = await fetch(url);
             const data = await response.json();
