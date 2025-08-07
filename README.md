@@ -174,8 +174,8 @@ Implement the server-side /api/weather endpoint with the provided JavaScript cod
 
 License
 
-This project is open-source. Feel free to modify and distribute, but please retain the original credits and acknowledge Axia Enterprises.
+This project is open-source. Feel free to modify and distribute, but please retain the original credits and acknowledge AXIA Enterprises.
 
 Contact
 
-For issues or suggestions, please open an issue on the repository or contact Axia Enterprises.
+For issues or suggestions, please open an issue on the repository or contact AXIA Enterprises.
