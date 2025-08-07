@@ -2,12 +2,15 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Retro Terminal</title>
     <link rel="icon" type="image/png" href="assets/favicon.png">
     <link rel="shortcut icon" type="image/png" href="assets/favicon.png">
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono:wght@400&display=swap');
+        html {
+            overflow-x: hidden;
+        }
         :root {
             --color-user: #00ff00;
             --color-ai: #00ffff;
@@ -34,9 +37,13 @@
             font-size: 16px;
             line-height: 1.5;
             overflow: hidden;
-            height: 100vh;
+            height: 100dvh;
             display: flex;
             flex-direction: column;
+            direction: ltr;
+            overflow-x: hidden;
+            width: 100vw;
+            position: fixed;
         }
         .terminal-container {
             flex: 1;
@@ -47,6 +54,8 @@
                 linear-gradient(0deg, transparent 49%, var(--bg-line) 50%, transparent 51%);
             background-size: 100% 100%, 100% 2px;
             overflow: hidden;
+            direction: ltr;
+            overflow-x: hidden;
         }
         .terminal-output {
             flex: 1;
@@ -54,6 +63,7 @@
             overflow-y: auto;
             background: rgba(0,0,0,0.8);
             position: relative;
+            overflow-x: hidden;
         }
         .terminal-input-container {
             padding: 20px;
@@ -61,7 +71,8 @@
             display: flex;
             align-items: center;
             gap: 10px;
-            position: relative;
+            position: sticky;
+            bottom: 0;
             z-index: 1; /* Ensure above other elements */
         }
         .prompt {
@@ -96,6 +107,10 @@
         .system-message {
             color: var(--color-system);
             font-style: italic;
+        }
+        .help-message {
+            color: var(--color-help);
+            font-style: normal;
         }
         .error-message {
             color: var(--color-error);
@@ -134,9 +149,6 @@
         @media (max-width: 768px) {
             .terminal-output { padding: 10px; }
             .terminal-input-container { padding: 10px; }
-            body {
-                height: 100dvh; /* Dynamic viewport height for mobile */
-            }
         }
         .command-menu {
             position: absolute;
@@ -149,27 +161,13 @@
             padding: 10px;
             display: none;
             z-index: 20;
-            border-top: none; /* Remove any border/line */
+            border-top: none; /* No line */
         }
         .command-menu ul {
             list-style: none;
         }
         .command-menu li {
             margin-bottom: 5px;
-            color: var(--color-help); /* Ensure grey */
-        }
-        .copy-button {
-            position: absolute;
-            right: 0;
-            top: 0;
-            background: transparent;
-            border: none;
-            color: var(--color-user);
-            cursor: pointer;
-            opacity: 0.5;
-        }
-        .message:hover .copy-button {
-            opacity: 1;
         }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.1.0/tesseract.min.js"></script>
@@ -224,6 +222,8 @@
             terminalInput.addEventListener('focus', () => {
                 setTimeout(() => {
                     terminalInput.scrollIntoView({ behavior: 'smooth', block: 'end' });
+                    document.body.scrollLeft = 0;
+                    terminalOutput.scrollLeft = 0;
                 }, 300); // Delay for keyboard to open on mobile
             });
             terminalInput.addEventListener('keypress', (e) => {
@@ -265,6 +265,9 @@
             if (type === 'ai') {
                 content = content.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" style="color: var(--color-ai);">$1</a>');
             }
+            if (type === 'help') {
+                messageDiv.classList.add('help-message');
+            }
             if (typeEffect) {
                 let i = 0;
                 const typeWriter = () => {
@@ -280,16 +283,6 @@
                 messageDiv.innerHTML = content;
                 terminalOutput.appendChild(messageDiv);
             }
-            // Add copy button
-            const copyButton = document.createElement('button');
-            copyButton.className = 'copy-button';
-            copyButton.innerText = 'Copy';
-            copyButton.onclick = () => {
-                navigator.clipboard.writeText(messageDiv.innerText);
-                copyButton.innerText = 'Copied!';
-                setTimeout(() => copyButton.innerText = 'Copy', 2000);
-            };
-            messageDiv.appendChild(copyButton);
             terminalOutput.scrollTop = terminalOutput.scrollHeight;
         }
         function startMatrixEffect() {
@@ -367,7 +360,7 @@
             commandMenu.style.display = 'none'; // Hide menu on submit
             inputHistory.push(userInput);
             historyIndex = -1;
-            addMessage('user', `user@terminal:~$ ${userInput}`); // Ensure user message is added
+            addMessage('user', `user@terminal:~$ ${userInput}`);
             if (lowerInput === '/clear') {
                 terminalOutput.innerHTML = '';
                 terminalInput.value = '';
@@ -379,7 +372,8 @@
                 return;
             }
             if (lowerInput === '/help') {
-                addMessage('system', commands.map(c => `- ${c.cmd}: ${c.desc}`).join('\n'));
+                const helpContent = commands.map(c => `- ${c.cmd}: ${c.desc}`).join('<br>');
+                addMessage('help', helpContent);
                 terminalInput.value = '';
                 return;
             }
